@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giga gaming</title>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <style>
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #000; /* Space-like background color */
+        }
+        #restartButton {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #restartButton:hover {
+            background-color: #0056b3;
+        }
+        body{
+            background-color: #D2D2D2;
+            background-image:
+            repeating-linear-gradient(
+                to right, transparent 0 100px,
+                #25283b22 100px 101px
+            ),
+            repeating-linear-gradient(
+                to bottom, transparent 0 100px,
+                #25283b22 100px 101px
+            );
+
+        }
+
+    </style>
+</head>
+<body>
+    <h1>SpaceZ</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <button id="restartButton">Restart Game</button>
+    <py-script>
+        from js import document, window
+        import random
+        from pyodide.ffi import create_proxy
+
+        canvas = document.getElementById('gameCanvas')
+        ctx = canvas.getContext('2d')
+
+        # Game settings
+        spaceship_width, spaceship_height = 60, 30
+        bullet_width, bullet_height = 5, 15
+        target_width, target_height = 60, 30
+
+        # Image URLs from Google Drive
+        background_img_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Webb%27s_First_Deep_Field.jpg/1200px-Webb%27s_First_Deep_Field.jpg'
+        spaceship_img_url = 'https://w7.pngwing.com/pngs/740/128/png-transparent-spacecraft-rocket-cartoon-spaceship-miscellaneous-sticker-outer-space-thumbnail.png'
+        bullet_img_url = 'https://www.shutterstock.com/image-vector/gun-bullet-vector-design-illustration-260nw-1499664668.jpg'
+        target_img_url = 'https://people.com/thmb/HyzCjGlZMJnyrJOVljYJrh-7XAY=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc():focal(742x336:744x338)/UFO-ship-070224-tout-ad51af8d1b6b449d8cd58cccc75cedd5.jpg'
+
+        # Initialize game state
+        spaceship = {'x': canvas.width // 2 - spaceship_width // 2, 'y': canvas.height - spaceship_height - 10, 'dx': 0}
+        bullets = []
+        targets = [{'x': i * (target_width + 20), 'y': 30, 'dx': random.choice([-2, 2]), 'dy': 2} for i in range(8)]
+        score = 0
+
+        # Image variables
+        background_img = None
+        spaceship_img = None
+        bullet_img = None
+        target_img = None
+
+        # Load images with error handling
+        def load_image(src, callback):
+            img = document.createElement('img')
+            img.src = src
+            img.onerror = lambda e: print(f"Failed to load image: {src}")
+            img.onload = lambda e: callback()
+            return img
+
+        def on_images_loaded():
+            global background_img, spaceship_img, bullet_img, target_img
+            background_img = load_image(background_img_url, lambda: None)
+            spaceship_img = load_image(spaceship_img_url, lambda: None)
+            bullet_img = load_image(bullet_img_url, lambda: None)
+            target_img = load_image(target_img_url, lambda: None)
+
+            # Ensure images are loaded before starting the game loop
+            window.requestAnimationFrame(create_proxy(game_loop))
+
+        def draw_background():
+            if background_img:
+                ctx.drawImage(background_img, 0, 0, canvas.width, canvas.height)
+
+        def draw_spaceship():
+            if spaceship_img:
+                ctx.drawImage(spaceship_img, spaceship['x'], spaceship['y'], spaceship_width, spaceship_height)
+
+        def draw_bullets():
+            if bullet_img:
+                for bullet in bullets:
+                    ctx.drawImage(bullet_img, bullet['x'], bullet['y'], bullet_width, bullet_height)
+
+        def draw_targets():
+            if target_img:
+                for target in targets:
+                    ctx.drawImage(target_img, target['x'], target['y'], target_width, target_height)
+
+        def draw_score():
+            ctx.font = '24px Arial'
+            ctx.fillStyle = '#fff'
+            ctx.fillText(f'Score: {score}', 10, 30)
+
+        def update():
+            global score
+            spaceship['x'] += spaceship['dx']
+
+            # Move bullets
+            for bullet in bullets[:]:
+                bullet['y'] -= 5
+                if bullet['y'] < 0:
+                    bullets.remove(bullet)
+
+            # Move targets and wrap around
+            for target in targets:
+                target['x'] += target['dx']
+                target['y'] += target['dy']
+                if target['x'] < 0 or target['x'] > canvas.width - target_width:
+                    target['dx'] *= -1
+                if target['y'] > canvas.height:
+                    target['x'] = random.randint(0, canvas.width - target_width)
+                    target['y'] = -target_height
+
+            # Check for collisions with targets
+            for bullet in bullets[:]:
+                for target in targets[:]:
+                    if (target['x'] <= bullet['x'] <= target['x'] + target_width and
+                        target['y'] <= bullet['y'] <= target['y'] + target_height):
+                        bullets.remove(bullet)
+                        targets.remove(target)
+                        score += 10
+                        break
+
+            # Game over if collided with target
+            for target in targets:
+                if (target['x'] <= spaceship['x'] <= target['x'] + target_width and
+                    target['y'] <= spaceship['y'] <= target['y'] + target_height):
+                    window.alert("Game Over!")
+                    reset_game()
+                    break
+
+        def draw():
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            draw_background()
+            draw_spaceship()
+            draw_bullets()
+            draw_targets()
+            draw_score()
+
+        def game_loop(timestamp):
+            update()
+            draw()
+            window.requestAnimationFrame(create_proxy(game_loop))
+
+        def on_key_down(event):
+            if event.key == 'ArrowLeft':
+                spaceship['dx'] = -5
+            elif event.key == 'ArrowRight':
+                spaceship['dx'] = 5
+            elif event.key == ' ':
+                bullets.append({'x': spaceship['x'] + spaceship_width // 2 - bullet_width // 2, 'y': spaceship['y']})
+
+        def on_key_up(event):
+            if event.key in ['ArrowLeft', 'ArrowRight']:
+                spaceship['dx'] = 0
+
+        def reset_game():
+            global targets, bullets, score
+            spaceship['x'] = canvas.width // 2 - spaceship_width // 2
+            bullets = []
+            targets = [{'x': i * (target_width + 20), 'y': 30, 'dx': random.choice([-2, 2]), 'dy': 2} for i in range(8)]
+            score = 0
+
+        def on_restart_button_click(event):
+            reset_game()
+
+        document.addEventListener('keydown', create_proxy(on_key_down))
+        document.addEventListener('keyup', create_proxy(on_key_up))
+        document.getElementById('restartButton').addEventListener('click', create_proxy(on_restart_button_click))
+
+        # Initialize game
+        on_images_loaded()
+    </py-script>
+    <script src="https://pyscript.net/latest/pyscript.js"></script>
+</body>
+</html>
+
+
+

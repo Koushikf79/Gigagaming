@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giga gaming</title>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <style>
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #f0f0f0; /* Placeholder color for the background */
+        }
+        #restartButton {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #restartButton:hover {
+            background-color: #0056b3;
+        }
+        body{
+            background-color: #D2D2D2;
+            background-image:
+            repeating-linear-gradient(
+                to right, transparent 0 100px,
+                #25283b22 100px 101px
+            ),
+            repeating-linear-gradient(
+                to bottom, transparent 0 100px,
+                #25283b22 100px 101px
+            );
+
+        }
+    </style>
+</head>
+<body>
+    <h1>Breakout</h1>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+    <button id="restartButton">Restart Game</button>
+    <py-script>
+        from js import document, window
+        import random
+        from pyodide.ffi import create_proxy
+
+        canvas = document.getElementById('gameCanvas')
+        ctx = canvas.getContext('2d')
+
+        # Game settings
+        paddle_width, paddle_height = 80, 10
+        ball_size = 10
+        brick_width, brick_height = 60, 20
+
+        # Image variables
+        background_img = None
+        paddle_img = None
+        ball_img = None
+        brick_img = None
+
+        # Game variables
+        paddle = {'x': canvas.width // 2 - paddle_width // 2, 'y': canvas.height - 30, 'dx': 0}
+        ball = {'x': canvas.width // 2, 'y': canvas.height // 2, 'dx': 2, 'dy': -2}
+        bricks = [{'x': i * (brick_width + 10), 'y': j * (brick_height + 10)} for i in range(10) for j in range(4)]
+        score = 0
+
+        # Load images with error handling
+        def load_image(src, callback):
+            img = document.createElement('img')
+            img.src = src
+            img.onerror = lambda e: print(f"Failed to load image: {src}")
+            img.onload = lambda e: callback()
+            return img
+
+        def on_images_loaded():
+            global background_img, paddle_img, ball_img, brick_img
+            background_img = load_image('assets/background.png', lambda: None)
+            paddle_img = load_image('assets/war.png', lambda: None)
+            ball_img = load_image('assets/paper.png', lambda: None)
+            brick_img = load_image('assets/pipe.png', lambda: None)
+
+            # Ensure images are loaded before starting the game loop
+            window.requestAnimationFrame(create_proxy(game_loop))
+
+        def draw_background():
+            if background_img:
+                ctx.drawImage(background_img, 0, 0, canvas.width, canvas.height)
+
+        def draw_paddle():
+            if paddle_img:
+                ctx.drawImage(paddle_img, paddle['x'], paddle['y'], paddle_width, paddle_height)
+
+        def draw_ball():
+            if ball_img:
+                ctx.drawImage(ball_img, ball['x'], ball['y'], ball_size, ball_size)
+
+        def draw_bricks():
+            if brick_img:
+                for brick in bricks:
+                    ctx.drawImage(brick_img, brick['x'], brick['y'], brick_width, brick_height)
+
+        def draw_score():
+            ctx.font = '24px Arial'
+            ctx.fillStyle = '#000'
+            ctx.fillText(f'Score: {score}', 10, 30)
+
+        def update():
+            global score
+            paddle['x'] += paddle['dx']
+            ball['x'] += ball['dx']
+            ball['y'] += ball['dy']
+
+            # Ball collision with top wall
+            if ball['y'] <= 0:
+                ball['dy'] *= -1
+            
+            # Ball collision with side walls
+            if ball['x'] <= 0 or ball['x'] >= canvas.width - ball_size:
+                ball['dx'] *= -1
+            
+            # Ball collision with paddle
+            if (paddle['x'] <= ball['x'] <= paddle['x'] + paddle_width and
+                paddle['y'] <= ball['y'] + ball_size <= paddle['y'] + paddle_height):
+                ball['dy'] *= -1
+
+            # Ball out of bounds
+            if ball['y'] > canvas.height:
+                reset_game()
+
+            # Ball collision with bricks
+            for brick in bricks:
+                if (brick['x'] <= ball['x'] <= brick['x'] + brick_width and
+                    brick['y'] <= ball['y'] <= brick['y'] + brick_height):
+                    ball['dy'] *= -1
+                    bricks.remove(brick)
+                    score += 10  # Increase score
+                    break
+
+        def draw():
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            draw_background()
+            draw_paddle()
+            draw_ball()
+            draw_bricks()
+            draw_score()
+
+        def game_loop(timestamp):
+            update()
+            draw()
+            window.requestAnimationFrame(create_proxy(game_loop))
+
+        def on_key_down(event):
+            if event.key == 'ArrowLeft':
+                paddle['dx'] = -5
+            elif event.key == 'ArrowRight':
+                paddle['dx'] = 5
+
+        def on_key_up(event):
+            if event.key in ['ArrowLeft', 'ArrowRight']:
+                paddle['dx'] = 0
+
+        def reset_game():
+            global bricks, score
+            paddle['x'] = canvas.width // 2 - paddle_width // 2
+            ball['x'] = canvas.width // 2
+            ball['y'] = canvas.height // 2
+            ball['dx'] = random.choice([-2, 2])
+            ball['dy'] = -2
+            bricks = [{'x': i * (brick_width + 10), 'y': j * (brick_height + 10)} for i in range(10) for j in range(4)]
+            score = 0
+
+        def on_restart_button_click(event):
+            reset_game()
+
+        document.addEventListener('keydown', create_proxy(on_key_down))
+        document.addEventListener('keyup', create_proxy(on_key_up))
+        document.getElementById('restartButton').addEventListener('click', create_proxy(on_restart_button_click))
+
+        # Initialize game
+        on_images_loaded()
+    </py-script>
+    <script src="https://pyscript.net/latest/pyscript.js"></script>
+</body>
+</html>

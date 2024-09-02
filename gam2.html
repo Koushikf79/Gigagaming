@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giga Ggaming</title>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <style>
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #f0f0f0; /* Placeholder color for the classroom background */
+        }
+        body{
+            background-color: #D2D2D2;
+            background-image:
+            repeating-linear-gradient(
+                to right, transparent 0 100px,
+                #25283b22 100px 101px
+            ),
+            repeating-linear-gradient(
+                to bottom, transparent 0 100px,
+                #25283b22 100px 101px
+            );
+
+        }
+    </style>
+</head>
+<body>
+    <h1>Pong</h1>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+    <py-script>
+        from js import document, window
+        import random
+        from pyodide.ffi import create_proxy
+
+        canvas = document.getElementById('gameCanvas')
+        ctx = canvas.getContext('2d')
+
+        # Game settings
+        paddle_width, paddle_height = 60, 100  # War dimensions
+        ball_size = 20  # Paper dimensions
+
+        # Image variables
+        classroom_img = None
+        war_img = None
+        paper_img = None
+
+        # Load images with error handling
+        def load_image(src, callback):
+            img = document.createElement('img')
+            img.src = src
+            img.onerror = lambda e: print(f"Failed to load image: {src}")
+            img.onload = lambda e: callback()
+            return img
+
+        def on_images_loaded():
+            global classroom_img, war_img, paper_img
+            classroom_img = load_image('assets/classroom.png', lambda: None)
+            war_img = load_image('assets/war.png', lambda: None)
+            paper_img = load_image('assets/paper.png', lambda: None)
+
+            # Ensure images are loaded before starting the game loop
+            window.requestAnimationFrame(create_proxy(game_loop))
+
+        def draw_paddle(paddle, img):
+            if img:
+                ctx.drawImage(img, paddle['x'], paddle['y'], paddle_width, paddle_height)
+
+        def draw_ball():
+            if paper_img:
+                ctx.drawImage(paper_img, ball['x'], ball['y'], ball_size, ball_size)
+
+        def draw_background():
+            if classroom_img:
+                ctx.drawImage(classroom_img, 0, 0, canvas.width, canvas.height)
+
+        # Game variables
+        left_paddle = {'x': 10, 'y': canvas.height // 2 - paddle_height // 2, 'dy': 0}
+        right_paddle = {'x': canvas.width - 70, 'y': canvas.height // 2 - paddle_height // 2, 'dy': 0}
+        ball = {'x': canvas.width // 2, 'y': canvas.height // 2, 'dx': 2, 'dy': 2}
+
+        def update():
+            left_paddle['y'] += left_paddle['dy']
+            right_paddle['y'] += right_paddle['dy']
+            ball['x'] += ball['dx']
+            ball['y'] += ball['dy']
+
+            if ball['y'] <= 0 or ball['y'] >= canvas.height - ball_size:
+                ball['dy'] *= -1
+            if (ball['x'] <= left_paddle['x'] + paddle_width and
+                left_paddle['y'] < ball['y'] < left_paddle['y'] + paddle_height):
+                ball['dx'] *= -1
+            if (ball['x'] >= right_paddle['x'] - ball_size and
+                right_paddle['y'] < ball['y'] < right_paddle['y'] + paddle_height):
+                ball['dx'] *= -1
+            if ball['x'] < 0 or ball['x'] > canvas.width:
+                ball['x'] = canvas.width // 2
+                ball['y'] = canvas.height // 2
+                ball['dx'] = random.choice([-2, 2])
+                ball['dy'] = random.choice([-2, 2])
+
+        def draw():
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            draw_background()
+            draw_paddle(left_paddle, war_img)
+            draw_paddle(right_paddle, war_img)
+            draw_ball()
+
+        def game_loop(timestamp):
+            update()
+            draw()
+            window.requestAnimationFrame(create_proxy(game_loop))
+
+        def on_key_down(event):
+            if event.key == 'ArrowUp':
+                right_paddle['dy'] = -5
+            elif event.key == 'ArrowDown':
+                right_paddle['dy'] = 5
+            elif event.key == 'w':
+                left_paddle['dy'] = -5
+            elif event.key == 's':
+                left_paddle['dy'] = 5
+
+        def on_key_up(event):
+            if event.key in ['ArrowUp', 'ArrowDown']:
+                right_paddle['dy'] = 0
+            elif event.key in ['w', 's']:
+                left_paddle['dy'] = 0
+
+        document.addEventListener('keydown', create_proxy(on_key_down))
+        document.addEventListener('keyup', create_proxy(on_key_up))
+
+        on_images_loaded()
+    </py-script>
+    <script src="https://pyscript.net/latest/pyscript.js"></script>
+</body>
+</html>
+

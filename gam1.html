@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giga gaming</title>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <style>
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #87CEEB; /* Sky blue background */
+        }
+        body{
+            background-color: #D2D2D2;
+            background-image:
+            repeating-linear-gradient(
+                to right, transparent 0 100px,
+                #25283b22 100px 101px
+            ),
+            repeating-linear-gradient(
+                to bottom, transparent 0 100px,
+                #25283b22 100px 101px
+            );
+
+        }
+    </style>
+</head>
+<body>
+    <h1>Student fly</h1>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <py-script>
+        from js import document, window
+        import random
+        from pyodide.ffi import create_proxy
+
+        # Game settings
+        gravity = 0.5
+        flap_power = -10
+        pipe_speed = 5
+        pipe_gap = 150
+
+        # Get canvas and context
+        canvas = document.getElementById('gameCanvas')
+        ctx = canvas.getContext('2d')
+
+        # Game variables
+        bird = {
+            'x': 100,
+            'y': 300,
+            'width': 34,
+            'height': 24,
+            'velocity': 0
+        }
+
+        pipes = []
+        score = 0
+        high_score = 0
+        game_over = False
+
+        # Load images
+        def load_image(src):
+            img = document.createElement('img')
+            img.src = src
+            return img
+
+        bird_img = load_image('assets/bird.png')  # Ensure this path is correct
+        pipe_img = load_image('assets/pipe.png')  # Ensure this path is correct
+        background_img = load_image('assets/background.png')  # Ensure this path is correct
+
+        def draw_bird():
+            ctx.drawImage(bird_img, bird['x'], bird['y'], bird['width'], bird['height'])
+
+        def draw_pipe(pipe):
+            # Top pipe
+            ctx.drawImage(pipe_img, pipe['x'], 0, pipe['width'], pipe['top_height'])
+            # Bottom pipe
+            ctx.drawImage(pipe_img, pipe['x'], canvas.height - pipe['bottom_height'], pipe['width'], pipe['bottom_height'])
+
+        def draw_background():
+            ctx.drawImage(background_img, 0, 0, canvas.width, canvas.height)
+
+        def update():
+            global game_over, score, high_score
+
+            if not game_over:
+                bird['velocity'] += gravity
+                bird['y'] += bird['velocity']
+
+                if not pipes or pipes[-1]['x'] < canvas.width - 200:
+                    pipe_height = random.randint(100, canvas.height - pipe_gap - 100)
+                    pipes.append({
+                        'x': canvas.width,
+                        'width': 50,  # Assuming pipe width
+                        'top_height': pipe_height,
+                        'bottom_height': canvas.height - pipe_height - pipe_gap,
+                        'passed': False
+                    })
+
+                for pipe in pipes:
+                    pipe['x'] -= pipe_speed
+
+                    if not pipe['passed'] and pipe['x'] < bird['x']:
+                        pipe['passed'] = True
+                        score += 1
+
+                    if pipe['x'] + pipe['width'] < 0:
+                        pipes.remove(pipe)
+
+                    if (bird['x'] < pipe['x'] + pipe['width'] and
+                        bird['x'] + bird['width'] > pipe['x'] and
+                        (bird['y'] < pipe['top_height'] or
+                         bird['y'] + bird['height'] > canvas.height - pipe['bottom_height'])):
+                        game_over = True
+
+                if bird['y'] + bird['height'] > canvas.height or bird['y'] < 0:
+                    game_over = True
+
+                if score > high_score:
+                    high_score = score
+
+        def draw():
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+            draw_background()
+
+            if game_over:
+                ctx.font = '35px Comic Sans MS'
+                ctx.fillStyle = 'red'
+                ctx.textAlign = 'center'
+                ctx.fillText('Game Over', canvas.width / 2, canvas.height / 3)
+                ctx.fillStyle = 'green'
+                ctx.fillText('Restart (Press R)', canvas.width / 2, canvas.height / 2)
+            else:
+                draw_bird()
+                for pipe in pipes:
+                    draw_pipe(pipe)
+
+                ctx.font = '35px Comic Sans MS'
+                ctx.fillStyle = 'black'
+                ctx.textAlign = 'left'
+                ctx.fillText(f'Score: {score}', 10, 50)
+                ctx.fillText(f'High Score: {high_score}', 10, 100)
+
+        def game_loop(timestamp):
+            update()
+            draw()
+            window.requestAnimationFrame(create_proxy(game_loop))
+
+        # Event listeners
+        def on_key_down(event):
+            global game_over
+            if event.key == ' ' and not game_over:  # Spacebar
+                bird['velocity'] = flap_power
+            elif event.key == 'r' and game_over:  # R key
+                bird['y'] = canvas.height / 2
+                bird['velocity'] = 0
+                pipes.clear()
+                score = 0
+                game_over = False
+
+        # Create a persistent proxy for the event handler
+        document.addEventListener('keydown', create_proxy(on_key_down))
+        game_loop(0)
+    </py-script>
+    <script src="https://pyscript.net/latest/pyscript.js"></script>
+</body>
+</html>
